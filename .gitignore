@@ -1,0 +1,10 @@
+﻿__pycache__/
+*.py[cod]
+data/settings.json
+data/conversations.json
+*.mp3
+*.wav
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
