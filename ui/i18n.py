@@ -55,19 +55,55 @@ TRANSLATIONS = {
         "working_dir": "工作目录",
         "browse": "浏览",
         "save_settings": "保存设置",
+        "add_model": "添加",
+        "model_placeholder": "输入模型名称",
+        "stop_btn": "停止",
         "show": "显示",
         "hide": "隐藏",
         "select_workdir": "选择工作目录",
+        "credit": "由 wuhenlol 制作并开源",
 
         # 对话管理
         "rename_title": "重命名对话",
         "rename_prompt": "输入新名称：",
         "new_chat_title": "新对话",
 
+        # Token 统计
+        "token_input": "输入",
+        "token_output": "输出",
+        "token_total": "总计",
+
+        # 语音角色
+        "voice_xiaoxiao": "晓晓（女声，温柔）",
+        "voice_xiaoxiao_multi": "晓晓多语言（女声）",
+        "voice_yunxi": "云希（男声，阳光）",
+        "voice_yunjian": "云健（男声，沉稳）",
+        "voice_xiaoyi": "晓艺（女声，活泼）",
+        "voice_yunyang": "云扬（男声，新闻播报）",
+        "voice_xiaochen": "晓辰（女声，知性）",
+        "voice_xiaohan": "晓涵（女声，温暖）",
+        "voice_jenny": "Jenny（女声，美式英语）",
+        "voice_aria": "Aria（女声，美式英语）",
+        "voice_guy": "Guy（男声，美式英语）",
+        "voice_sara": "Sara（女声，美式英语）",
+        "voice_davis": "Davis（男声，美式英语）",
+
         # 状态
         "thinking_status": "正在思考...",
         "executing_status": "正在执行: ",
         "error_status": "出错了",
+        "paused_status": "对话已暂停",
+
+        # 文件树
+        "file_tree": "文件浏览",
+        "file_tree_empty": "未设置工作目录",
+        "file_tree_refresh": "刷新",
+        "file_open": "打开",
+        "file_delete": "删除",
+        "file_delete_confirm": "删除不可恢复，确认删除？",
+        "file_delete_confirm_title": "确认删除",
+        "file_deleted": "已删除",
+        "file_delete_failed": "删除失败",
     },
     "en": {
         # Top bar
@@ -121,19 +157,55 @@ TRANSLATIONS = {
         "working_dir": "Working Directory",
         "browse": "Browse",
         "save_settings": "Save Settings",
+        "add_model": "Add",
+        "model_placeholder": "Enter model name",
+        "stop_btn": "Stop",
         "show": "Show",
         "hide": "Hide",
         "select_workdir": "Select Working Directory",
+        "credit": "Made and open-sourced by wuhenlol",
 
         # Conversation management
         "rename_title": "Rename Chat",
         "rename_prompt": "Enter new name:",
         "new_chat_title": "New Chat",
 
+        # Token stats
+        "token_input": "Input",
+        "token_output": "Output",
+        "token_total": "Total",
+
+        # Voice roles
+        "voice_xiaoxiao": "Xiaoxiao (Female, Gentle)",
+        "voice_xiaoxiao_multi": "Xiaoxiao Multilingual (Female)",
+        "voice_yunxi": "Yunxi (Male, Cheerful)",
+        "voice_yunjian": "Yunjian (Male, Steady)",
+        "voice_xiaoyi": "Xiaoyi (Female, Lively)",
+        "voice_yunyang": "Yunyang (Male, News Anchor)",
+        "voice_xiaochen": "Xiaochen (Female, Intellectual)",
+        "voice_xiaohan": "Xiaohan (Female, Warm)",
+        "voice_jenny": "Jenny (Female, US English)",
+        "voice_aria": "Aria (Female, US English)",
+        "voice_guy": "Guy (Male, US English)",
+        "voice_sara": "Sara (Female, US English)",
+        "voice_davis": "Davis (Male, US English)",
+
         # Status
         "thinking_status": "Thinking...",
         "executing_status": "Executing: ",
         "error_status": "Error occurred",
+        "paused_status": "Paused",
+
+        # File tree
+        "file_tree": "Files",
+        "file_tree_empty": "No working directory",
+        "file_tree_refresh": "Refresh",
+        "file_open": "Open",
+        "file_delete": "Delete",
+        "file_delete_confirm": "Cannot be undone. Confirm delete?",
+        "file_delete_confirm_title": "Confirm Delete",
+        "file_deleted": "Deleted",
+        "file_delete_failed": "Delete failed",
     },
 }
 

@@ -23,7 +23,7 @@ class InputBar(ctk.CTkFrame):
 
         self.text_input = ctk.CTkTextbox(
             input_row, font=ctk.CTkFont(size=14),
-            height=36, wrap="word",
+            height=70, wrap="word",
         )
         self.text_input.pack(side="left", fill="both", expand=True, padx=(0, 8))
         self.text_input.bind("<Return>", self._on_enter)
@@ -40,6 +40,17 @@ class InputBar(ctk.CTkFrame):
         )
         self.send_btn.pack(side="right")
 
+        # 模型选择
+        models_list = config.get("models", [config.get("model", "mimo-v2.5-pro")])
+        self.model_var = ctk.StringVar(value=config.get("model", models_list[0] if models_list else "mimo-v2.5-pro"))
+        self.model_menu = ctk.CTkOptionMenu(
+            input_row, variable=self.model_var,
+            values=models_list if models_list else ["mimo-v2.5-pro"],
+            width=140, height=36, font=ctk.CTkFont(size=12),
+            dropdown_font=ctk.CTkFont(size=12),
+        )
+        self.model_menu.pack(side="right", padx=(0, 8))
+
         # 语音控制行
         voice_row = ctk.CTkFrame(self, fg_color="transparent")
         voice_row.pack(fill="x", padx=16, pady=(0, 10))
@@ -47,19 +58,22 @@ class InputBar(ctk.CTkFrame):
         self.voice_var = ctk.StringVar(value=config.get("voice", VOICE_LIST[0][0]))
         self.voice_menu = ctk.CTkOptionMenu(
             voice_row, variable=self.voice_var,
-            values=[v[1] for v in VOICE_LIST],
-            width=180, height=28, font=ctk.CTkFont(size=12),
+            values=[T(v[1]) for v in VOICE_LIST],
+            width=200, height=28, font=ctk.CTkFont(size=12),
         )
         self.voice_menu.pack(side="left", padx=(0, 12))
 
         # 设置当前语音名称
         for v in VOICE_LIST:
             if v[0] == self.voice_var.get():
-                self.voice_menu.set(v[1])
+                self.voice_menu.set(T(v[1]))
                 break
 
-        ctk.CTkLabel(voice_row, text=T("speed"), font=ctk.CTkFont(size=12),
-                     text_color=theme["text_secondary"]).pack(side="left", padx=(0, 4))
+        self.speed_label = ctk.CTkLabel(
+            voice_row, text=T("speed"), font=ctk.CTkFont(size=12),
+            text_color=theme["text_secondary"],
+        )
+        self.speed_label.pack(side="left", padx=(0, 4))
         self.rate_var = ctk.IntVar(value=config.get("rate", 0))
         self.rate_slider = ctk.CTkSlider(
             voice_row, from_=-50, to=50, variable=self.rate_var,
@@ -72,19 +86,22 @@ class InputBar(ctk.CTkFrame):
         )
         self.rate_label.pack(side="left", padx=(0, 12))
 
-        ctk.CTkLabel(voice_row, text=T("volume"), font=ctk.CTkFont(size=12),
-                     text_color=theme["text_secondary"]).pack(side="left", padx=(0, 4))
+        self.volume_label = ctk.CTkLabel(
+            voice_row, text=T("volume"), font=ctk.CTkFont(size=12),
+            text_color=theme["text_secondary"],
+        )
+        self.volume_label.pack(side="left", padx=(0, 4))
         self.volume_var = ctk.IntVar(value=config.get("volume", 80))
         self.volume_slider = ctk.CTkSlider(
             voice_row, from_=0, to=100, variable=self.volume_var,
             width=100, height=16,
         )
         self.volume_slider.pack(side="left", padx=(0, 4))
-        self.volume_label = ctk.CTkLabel(
+        self.volume_num_label = ctk.CTkLabel(
             voice_row, text="80%", font=ctk.CTkFont(size=11), width=36,
             text_color=theme["text_secondary"],
         )
-        self.volume_label.pack(side="left", padx=(0, 12))
+        self.volume_num_label.pack(side="left", padx=(0, 12))
 
         # 自动朗读开关
         self.auto_read_var = ctk.BooleanVar(value=config.get("auto_read", False))
@@ -93,6 +110,8 @@ class InputBar(ctk.CTkFrame):
             font=ctk.CTkFont(size=12),
             text_color=theme["text_secondary"],
             button_color=theme["accent"],
+            button_hover_color=theme["accent_hover"],
+            progress_color=theme["accent_dim"],
             command=self._on_auto_read_toggle,
         )
         self.auto_read_switch.pack(side="left")
@@ -105,7 +124,7 @@ class InputBar(ctk.CTkFrame):
         self.rate_label.configure(text=f"{self.rate_var.get()}%")
 
     def _update_volume_label(self, *args):
-        self.volume_label.configure(text=f"{self.volume_var.get()}%")
+        self.volume_num_label.configure(text=f"{self.volume_var.get()}%")
 
     def _on_auto_read_toggle(self):
         self.config["auto_read"] = self.auto_read_var.get()
@@ -127,9 +146,26 @@ class InputBar(ctk.CTkFrame):
     def get_voice_id(self) -> str:
         name = self.voice_menu.get()
         for v in VOICE_LIST:
-            if v[1] == name:
+            if T(v[1]) == name:
                 return v[0]
         return VOICE_LIST[0][0]
+
+    def get_selected_model(self) -> str:
+        return self.model_var.get()
+
+    def update_models(self):
+        try:
+            models = self.config.get("models", [])
+            if not models:
+                models = [self.config.get("model", "mimo-v2.5-pro")]
+            current = self.model_var.get()
+            self.model_menu.configure(values=models)
+            if current not in models:
+                self.model_var.set(models[0])
+            else:
+                self.model_var.set(current)
+        except Exception:
+            pass
 
     def set_enabled(self, enabled: bool):
         self._enabled = enabled
@@ -151,20 +187,36 @@ class InputBar(ctk.CTkFrame):
             text=T("send"),
             fg_color=theme["accent"], hover_color=theme["accent_hover"],
         )
+        self.model_menu.configure(
+            fg_color=theme["input_bg"], button_color=theme["accent"],
+            button_hover_color=theme["accent_hover"],
+            text_color=theme["text"],
+        )
         self.voice_menu.configure(
             fg_color=theme["input_bg"], button_color=theme["border"],
             button_hover_color=theme["scrollbar"],
             text_color=theme["text"],
+            values=[T(v[1]) for v in VOICE_LIST],
         )
+        # 更新语音名称显示
+        for v in VOICE_LIST:
+            if v[0] == self.voice_var.get():
+                self.voice_menu.set(T(v[1]))
+                break
+        # 更新文字标签（语言切换）
+        self.speed_label.configure(text=T("speed"), text_color=theme["text_secondary"])
+        self.volume_label.configure(text=T("volume"), text_color=theme["text_secondary"])
         for slider in (self.rate_slider, self.volume_slider):
             slider.configure(
                 fg_color=theme["border"], progress_color=theme["accent"],
                 button_color=theme["accent"], button_hover_color=theme["accent"],
             )
-        for lbl in (self.rate_label, self.volume_label):
+        for lbl in (self.rate_label, self.volume_num_label):
             lbl.configure(text_color=theme["text_secondary"])
         self.auto_read_switch.configure(
             text=T("auto_read"),
             text_color=theme["text_secondary"],
             button_color=theme["accent"],
+            button_hover_color=theme["accent_hover"],
+            progress_color=theme["accent_dim"],
         )

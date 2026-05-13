@@ -96,32 +96,49 @@ class LabeledEntry(ctk.CTkFrame):
 
 
 class ToolCallCard(ctk.CTkFrame):
-    """工具调用卡片"""
+    """工具调用卡片 — 默认折叠，点击展开"""
 
     def __init__(self, master, theme: dict, tool_name: str, params: str, **kwargs):
         super().__init__(master, corner_radius=8, **kwargs)
         self.theme = theme
+        self._tool_name = tool_name
+        self._params = params
+        self._result = ""
+        self._success = None
+        self._expanded = False
+
         self.configure(fg_color=theme["surface"], border_width=1, border_color=theme["border"])
 
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", padx=10, pady=(8, 4))
+        # 可点击的摘要行
+        self.summary_frame = ctk.CTkFrame(self, fg_color="transparent", cursor="hand2")
+        self.summary_frame.pack(fill="x", padx=10, pady=(6, 6))
 
-        self.status_label = ctk.CTkLabel(
-            header, text=T("executing"),
-            font=ctk.CTkFont(size=12),
+        self.status_icon = ctk.CTkLabel(
+            self.summary_frame, text="⏳",
+            font=ctk.CTkFont(size=13),
             text_color=theme["accent"],
         )
-        self.status_label.pack(side="left")
+        self.status_icon.pack(side="left")
 
         self.name_label = ctk.CTkLabel(
-            header, text=tool_name,
+            self.summary_frame, text=tool_name,
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=theme["text"],
         )
-        self.name_label.pack(side="left", padx=(8, 0))
+        self.name_label.pack(side="left", padx=(6, 0))
+
+        self.expand_hint = ctk.CTkLabel(
+            self.summary_frame, text="▸",
+            font=ctk.CTkFont(size=12),
+            text_color=theme["text_secondary"],
+        )
+        self.expand_hint.pack(side="right")
+
+        # 详情区域（默认隐藏）
+        self._detail_frame = ctk.CTkFrame(self, fg_color="transparent")
 
         self.detail_label = ctk.CTkLabel(
-            self, text=params,
+            self._detail_frame, text=params,
             font=ctk.CTkFont(size=11),
             text_color=theme["text_secondary"],
             wraplength=600,
@@ -130,19 +147,32 @@ class ToolCallCard(ctk.CTkFrame):
         self.detail_label.pack(anchor="w", padx=10, pady=(0, 4))
 
         self.result_box = ctk.CTkTextbox(
-            self, font=ctk.CTkFont(family="Consolas", size=11),
+            self._detail_frame, font=ctk.CTkFont(family="Consolas", size=11),
             height=0, wrap="word",
         )
         self.result_box.pack(fill="x", padx=10, pady=(0, 8))
         self.result_box.configure(state="disabled")
 
-        self._collapsed = False
+        # 绑定点击事件
+        for widget in [self.summary_frame, self.status_icon, self.name_label, self.expand_hint]:
+            widget.bind("<Button-1>", self._toggle)
+
+    def _toggle(self, event=None):
+        if self._expanded:
+            self._detail_frame.pack_forget()
+            self.expand_hint.configure(text="▸")
+            self._expanded = False
+        else:
+            self._detail_frame.pack(fill="x", after=self.summary_frame)
+            self.expand_hint.configure(text="▾")
+            self._expanded = True
 
     def set_result(self, result: str, success: bool = True):
-        self.status_label.configure(
-            text=T("completed") if success else T("failed"),
-            text_color=self.theme["success"] if success else self.theme["error"],
-        )
+        self._result = result
+        self._success = success
+        icon = "✓" if success else "✗"
+        color = self.theme["success"] if success else self.theme["error"]
+        self.status_icon.configure(text=icon, text_color=color)
         self.result_box.configure(state="normal")
         self.result_box.insert("1.0", result)
         self.result_box.configure(state="disabled")

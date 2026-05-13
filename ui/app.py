@@ -1,5 +1,6 @@
 """主窗口"""
 
+import time
 import uuid
 import json
 import customtkinter as ctk
@@ -28,6 +29,9 @@ class App(ctk.CTk):
         self._theme = get_theme(self._dark)
         self._current_conv_id = None
         self._speaking_bubble = None
+        self._thinking_timer = None
+        self._thinking_start_time = None
+        self._init_models_list()
 
         set_lang(config.get("language", "zh"))
 
@@ -84,6 +88,23 @@ class App(ctk.CTk):
         )
         self.theme_btn.pack(side="left", padx=(0, 8))
 
+        # 思考时间 + 停止按钮（默认隐藏）
+        self.thinking_label = ctk.CTkLabel(
+            top_right, text="",
+            font=ctk.CTkFont(size=12),
+            text_color=t["text_secondary"],
+        )
+
+        self.stop_btn = ctk.CTkButton(
+            top_right, text=T("stop_btn"), width=50, height=28,
+            font=ctk.CTkFont(size=11),
+            fg_color=t["error"],
+            hover_color="#cc4444",
+            text_color="#ffffff",
+            corner_radius=6,
+            command=self._on_stop,
+        )
+
         self.lang_btn = ctk.CTkButton(
             top_right, text=T("lang_btn"),
             width=50, height=32,
@@ -109,6 +130,7 @@ class App(ctk.CTk):
             on_settings=self._open_settings,
         )
         self.sidebar.pack(side="left", fill="y")
+        self.sidebar.set_working_dir(self.config.get("working_dir", ""))
 
         # 右侧内容区
         right = ctk.CTkFrame(body, fg_color="transparent")
@@ -207,8 +229,11 @@ class App(ctk.CTk):
         self.dir_label.configure(text_color=t["text_secondary"])
         self._update_dir_label()
         self.status_label.configure(text_color=t["text_secondary"], text=T("ready"))
-        self.model_label.configure(text_color=t["text_secondary"], text=f"{T('model_prefix')}{self.config['model']}")
+        self.model_label.configure(text_color=t["text_secondary"], text=f"{T('model_prefix')}")
         self.token_label.configure(text_color=t["text_secondary"])
+
+        # 停止按钮文字
+        self.stop_btn.configure(text=T("stop_btn"))
 
         # 子组件
         self.sidebar.apply_theme(t)
@@ -218,8 +243,49 @@ class App(ctk.CTk):
         # 强制刷新
         self.update_idletasks()
 
+    def _init_models_list(self):
+        if not self.config.get("models"):
+            self.config.set("models", [self.config.get("model", "mimo-v2.5-pro")])
+
     def _open_settings(self):
-        SettingsPanel(self, self.config, self._theme)
+        SettingsPanel(self, self.config, self._theme, on_save=self._on_save_settings)
+
+    def _on_save_settings(self):
+        self._update_dir_label()
+        self.sidebar.set_working_dir(self.config.get("working_dir", ""))
+        self.after(100, self.input_bar.update_models)
+
+    def _start_thinking(self):
+        t = self._theme
+        self._thinking_start_time = time.time()
+        self.thinking_label.configure(text=f"{T('thinking')}... 0s")
+        self.thinking_label.pack(side="right", padx=(0, 4))
+        self.stop_btn.pack(side="right", padx=(0, 4))
+        self._update_thinking_time()
+
+    def _update_thinking_time(self):
+        if self._thinking_start_time:
+            elapsed = int(time.time() - self._thinking_start_time)
+            self.thinking_label.configure(text=f"{T('thinking')}... {elapsed}s")
+            self._thinking_timer = self.after(1000, self._update_thinking_time)
+
+    def _stop_thinking(self):
+        if self._thinking_timer:
+            self.after_cancel(self._thinking_timer)
+            self._thinking_timer = None
+        self._thinking_start_time = None
+        try:
+            self.thinking_label.pack_forget()
+            self.stop_btn.pack_forget()
+        except Exception:
+            pass
+
+    def _on_stop(self):
+        self.api.cancel()
+        self._stop_thinking()
+        self.input_bar.set_enabled(True)
+        self.status_label.configure(text=T("ready"))
+        self.chat_area.add_paused()
 
     # 对话管理
     def _new_chat(self):
@@ -284,6 +350,35 @@ class App(ctk.CTk):
             if self._current_conv_id == conv_id:
                 self.sidebar.highlight_chat(conv_id)
 
+    def _generate_title(self, content: str) -> str:
+        """从用户消息生成简短对话标题（10-15字）"""
+        import re
+        # 取第一行非空文本
+        title = ""
+        for line in content.split("\n"):
+            line = line.strip()
+            if line:
+                title = line
+                break
+        if not title:
+            title = content.strip()
+
+        # 剥离 markdown 和代码块
+        title = re.sub(r'```[\s\S]*?```', '', title)
+        title = re.sub(r'`([^`]+)`', r'\1', title)
+        title = re.sub(r'\*\*(.*?)\*\*', r'\1', title)
+        title = re.sub(r'\*(.*?)\*', r'\1', title)
+        title = re.sub(r'#{1,6}\s*', '', title)
+        title = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', title)
+        title = title.strip()
+
+        # 截断到 15 字符
+        max_len = 15
+        if len(title) > max_len:
+            title = title[:max_len] + "..."
+
+        return title or content[:15] + "..."
+
     def _save_message(self, role: str, content):
         if not self._current_conv_id:
             return
@@ -294,7 +389,7 @@ class App(ctk.CTk):
             self.conv_store.update(self._current_conv_id, {"messages": messages})
             # 更新标题
             if role == "user" and len(messages) == 1:
-                title = content[:20] + ("..." if len(content) > 20 else "")
+                title = self._generate_title(content)
                 self.conv_store.update(self._current_conv_id, {"title": title})
                 self.sidebar.remove_chat_item(self._current_conv_id)
                 self.sidebar.add_chat_item(self._current_conv_id, title)
@@ -312,6 +407,8 @@ class App(ctk.CTk):
         self._save_message("user", text)
         self.input_bar.set_enabled(False)
         self.status_label.configure(text=T("thinking_status"))
+        self._start_thinking()
+        self.config["model"] = self.input_bar.get_selected_model()
 
         thinking = self.chat_area.add_thinking()
         ai_bubble = None
@@ -358,12 +455,16 @@ class App(ctk.CTk):
                     _, card = tool_cards[-1]
                     card.set_result(result[:2000], success=not result.startswith("错误"))
                 self.status_label.configure(text=T("thinking_status"))
+                # 文件操作工具完成后刷新文件树
+                if name in ("write_file", "edit_file", "run_command", "list_directory"):
+                    self.sidebar.refresh_file_tree()
             self.chat_area.after(0, _update)
 
         def on_done(full_text):
             def _finish():
                 nonlocal ai_bubble
                 destroy_thinking()
+                self._stop_thinking()
                 # 检查是否还在同一个对话
                 if self._current_conv_id != send_conv_id:
                     # 对话已切换，保存消息到原对话，但恢复输入栏
@@ -389,7 +490,7 @@ class App(ctk.CTk):
                 self.api.total_usage["output_tokens"] += self.api.last_usage.get("output_tokens", 0)
                 input_t = self.api.total_usage["input_tokens"]
                 output_t = self.api.total_usage["output_tokens"]
-                self.token_label.configure(text=f"Token: 输入 {input_t} | 输出 {output_t} | 总计 {input_t + output_t}")
+                self.token_label.configure(text=f"Token: {T('token_input')} {input_t} | {T('token_output')} {output_t} | {T('token_total')} {input_t + output_t}")
 
                 # 自动朗读
                 if self.input_bar.auto_read_var.get() and full_text:
@@ -399,6 +500,7 @@ class App(ctk.CTk):
         def on_error(err):
             def _err():
                 destroy_thinking()
+                self._stop_thinking()
                 if self._current_conv_id != send_conv_id:
                     self.input_bar.set_enabled(True)
                     self.status_label.configure(text=T("ready"))

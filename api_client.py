@@ -151,6 +151,15 @@ class MiMoClient:
             body["tools"] = TOOLS_DEFINITION
 
             system_prompt = self.config.get("system_prompt", "")
+            wd = self.config.get("working_dir", "")
+            if wd:
+                system_prompt += f"\n\n当前工作目录: {wd}\n所有文件操作的相对路径都基于此目录。创建、读写、编辑文件时必须在此目录下进行。"
+            system_prompt += (
+                "\n\n工具使用规则："
+                "\n- 当用户要求创建项目或指定文件结构时，必须按用户要求的文件结构分别创建每个文件，不要把所有代码合并到一个文件中"
+                "\n- 例如用户说「创建 main.py、timer.py、ui.py」，就分别调用 write_file 创建这三个文件"
+                "\n- 每个文件用独立的 write_file 调用，不要合并"
+            )
             if system_prompt:
                 body["system"] = system_prompt
 
@@ -178,6 +187,9 @@ class MiMoClient:
                 return
 
             full_text = ""
+            reasoning_content = ""
+            content_blocks = []  # 保留完整内容块顺序（含 thinking/text/tool_use）
+            current_block_type = None
             tool_uses = []
             current_tool = None
             current_tool_input = ""
@@ -209,13 +221,16 @@ class MiMoClient:
 
                     if event_type == "content_block_start":
                         block = event.get("content_block", {})
-                        if block.get("type") == "tool_use":
+                        current_block_type = block.get("type", "")
+                        if current_block_type == "tool_use":
                             current_tool = {
                                 "id": block.get("id", ""),
                                 "name": block.get("name", ""),
                                 "input": "",
                             }
                             current_tool_input = ""
+                        elif current_block_type == "thinking":
+                            content_blocks.append({"type": "thinking", "thinking": ""})
 
                     elif event_type == "content_block_delta":
                         delta = event.get("delta", {})
@@ -226,6 +241,13 @@ class MiMoClient:
                             if text:
                                 full_text += text
                                 on_token(text)
+
+                        elif delta_type == "thinking_delta":
+                            thinking_text = delta.get("thinking", "")
+                            if thinking_text:
+                                reasoning_content += thinking_text
+                                if content_blocks and content_blocks[-1].get("type") == "thinking":
+                                    content_blocks[-1]["thinking"] += thinking_text
 
                         elif delta_type == "input_json_delta":
                             current_tool_input += delta.get("partial_json", "")
@@ -239,17 +261,25 @@ class MiMoClient:
                             tool_uses.append(current_tool)
                             current_tool = None
                             current_tool_input = ""
+                        current_block_type = None
 
                     elif event_type == "message_delta":
                         usage = event.get("usage", {})
                         if usage:
                             self.last_usage["output_tokens"] = usage.get("output_tokens", 0)
+                        # 某些 API 在 message_delta 中返回 reasoning_content
+                        delta_obj = event.get("delta", {})
+                        if not reasoning_content:
+                            reasoning_content = delta_obj.get("reasoning_content", "")
 
                     elif event_type == "message_start":
                         message = event.get("message", {})
                         usage = message.get("usage", {})
                         if usage:
                             self.last_usage["input_tokens"] = usage.get("input_tokens", 0)
+                        # 某些 API 在 message 对象中返回 reasoning_content
+                        if not reasoning_content:
+                            reasoning_content = message.get("reasoning_content", "")
 
                     elif event_type == "message_stop":
                         done = True
@@ -267,6 +297,10 @@ class MiMoClient:
             if tool_uses:
                 # 把AI的回复（包含tool_use）加入messages
                 assistant_content = []
+                # 保留 thinking 块（MiMo thinking 模式需要回传 reasoning_content）
+                for blk in content_blocks:
+                    if blk.get("type") == "thinking" and blk.get("thinking"):
+                        assistant_content.append(blk)
                 if full_text:
                     assistant_content.append({"type": "text", "text": full_text})
                 for tu in tool_uses:
@@ -276,7 +310,10 @@ class MiMoClient:
                         "name": tu["name"],
                         "input": tu["input"],
                     })
-                self.messages.append({"role": "assistant", "content": assistant_content})
+                assistant_msg = {"role": "assistant", "content": assistant_content}
+                if reasoning_content:
+                    assistant_msg["reasoning_content"] = reasoning_content
+                self.messages.append(assistant_msg)
 
                 # 执行工具并收集结果
                 tool_results = []
@@ -287,7 +324,8 @@ class MiMoClient:
                     params = tu["input"]
                     on_tool_start(name, params)
 
-                    result = execute_tool(name, params)
+                    wd = self.config.get("working_dir", "")
+                    result = execute_tool(name, params, working_dir=wd)
                     on_tool_result(name, result)
 
                     tool_results.append({
@@ -303,7 +341,10 @@ class MiMoClient:
             else:
                 # 没有工具调用，完成
                 if full_text:
-                    self.messages.append({"role": "assistant", "content": full_text})
+                    assistant_msg = {"role": "assistant", "content": full_text}
+                    if reasoning_content:
+                        assistant_msg["reasoning_content"] = reasoning_content
+                    self.messages.append(assistant_msg)
                 on_done(full_text)
                 return
 

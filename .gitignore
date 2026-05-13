@@ -8,3 +8,7 @@ data/conversations.json
 Thumbs.db
 .vscode/
 .idea/
+.claude/
+Launching
+test.py
+my_file.txt

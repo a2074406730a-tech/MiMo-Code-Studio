@@ -9,10 +9,11 @@ from ui.i18n import T
 class SettingsPanel(ctk.CTkToplevel):
     """设置面板 - 右侧滑出"""
 
-    def __init__(self, master, config, theme: dict, **kwargs):
+    def __init__(self, master, config, theme: dict, on_save=None, **kwargs):
         super().__init__(master, **kwargs)
         self.config = config
         self.theme = theme
+        self._on_save = on_save
         self.title(T("settings_title"))
         self.geometry("420x600")
         self.resizable(False, False)
@@ -53,7 +54,37 @@ class SettingsPanel(ctk.CTkToplevel):
 
         self.url_entry = self._add_field(scroll, T("api_url"), config["api_url"])
         self.key_entry = self._add_field(scroll, T("api_key"), config["api_key"], show="•")
-        self.model_entry = self._add_field(scroll, T("model_name"), config["model"])
+        # 模型列表管理
+        ctk.CTkLabel(
+            scroll, text=T("model_name"),
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=theme["text"],
+        ).pack(anchor="w", pady=(8, 4))
+
+        model_add_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        model_add_row.pack(fill="x", pady=(0, 4))
+
+        self.model_name_entry = ctk.CTkEntry(
+            model_add_row, font=ctk.CTkFont(size=13),
+            placeholder_text=T("model_placeholder"),
+        )
+        self.model_name_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        add_model_btn = ctk.CTkButton(
+            model_add_row, text=T("add_model"), width=60, height=32,
+            font=ctk.CTkFont(size=12),
+            fg_color=theme["accent"],
+            hover_color=theme["accent_hover"],
+            text_color="#000000",
+            command=self._add_model,
+        )
+        add_model_btn.pack(side="right")
+
+        self.model_tags_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        self.model_tags_frame.pack(fill="x", pady=(0, 4))
+        self._model_tags = []
+        self._refresh_model_tags()
+
         self.tokens_entry = self._add_field(scroll, T("max_tokens"), str(config["max_tokens"]))
 
         # 系统提示词
@@ -110,7 +141,7 @@ class SettingsPanel(ctk.CTkToplevel):
 
         # 版权信息
         credit_label = ctk.CTkLabel(
-            self, text="wuhenlol 开源制作",
+            self, text=T("credit"),
             font=ctk.CTkFont(size=12),
             text_color=theme["text_secondary"],
         )
@@ -151,10 +182,61 @@ class SettingsPanel(ctk.CTkToplevel):
             self.working_dir_entry.delete(0, "end")
             self.working_dir_entry.insert(0, directory)
 
+    def _add_model(self):
+        name = self.model_name_entry.get().strip()
+        if not name:
+            return
+        models_list = self.config.get("models", [])
+        if name not in models_list:
+            models_list.append(name)
+            self.config.set("models", models_list)
+            self.config["model"] = name
+            self.model_name_entry.delete(0, "end")
+            self._refresh_model_tags()
+
+    def _remove_model(self, name):
+        models_list = self.config.get("models", [])
+        if name in models_list:
+            models_list.remove(name)
+            self.config.set("models", models_list)
+            if self.config["model"] == name:
+                self.config["model"] = models_list[0] if models_list else ""
+            self._refresh_model_tags()
+
+    def _refresh_model_tags(self):
+        for tag in self._model_tags:
+            tag.destroy()
+        self._model_tags.clear()
+
+        models_list = self.config.get("models", [self.config.get("model", "mimo-v2.5-pro")])
+        current_model = self.config.get("model", "")
+
+        for name in models_list:
+            tag = ctk.CTkFrame(self.model_tags_frame, fg_color=self.theme["surface"],
+                               corner_radius=6, border_width=1,
+                               border_color=self.theme["accent"] if name == current_model else self.theme["border"])
+            tag.pack(side="left", padx=(0, 4), pady=2)
+
+            ctk.CTkLabel(
+                tag, text=name,
+                font=ctk.CTkFont(size=11),
+                text_color=self.theme["text"],
+            ).pack(side="left", padx=(6, 2), pady=2)
+
+            ctk.CTkButton(
+                tag, text="x", width=18, height=18,
+                font=ctk.CTkFont(size=10),
+                fg_color="transparent",
+                hover_color=self.theme["error"],
+                text_color=self.theme["text_secondary"],
+                command=lambda n=name: self._remove_model(n),
+            ).pack(side="right", padx=(0, 4), pady=2)
+
+            self._model_tags.append(tag)
+
     def _save(self):
         self.config["api_url"] = self.url_entry.get()
         self.config["api_key"] = self.key_entry.get()
-        self.config["model"] = self.model_entry.get()
         try:
             self.config["max_tokens"] = int(self.tokens_entry.get())
         except ValueError:
@@ -162,4 +244,6 @@ class SettingsPanel(ctk.CTkToplevel):
         self.config["system_prompt"] = self.system_prompt_box.get("1.0", "end").strip()
         self.config["working_dir"] = self.working_dir_entry.get()
         self.config.save()
+        if hasattr(self, '_on_save') and self._on_save:
+            self._on_save()
         self.destroy()

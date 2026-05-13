@@ -218,19 +218,38 @@ def search_files(query: str, path: str, file_pattern: str = None) -> str:
         return f"搜索失败: {e}"
 
 
-def execute_tool(name: str, params: dict) -> str:
-    """执行指定工具"""
+def _resolve_path(path: str, working_dir: str) -> str:
+    """将相对路径解析为基于工作目录的绝对路径"""
+    if os.path.isabs(path):
+        return path
+    if working_dir:
+        return os.path.join(working_dir, path)
+    return path
+
+
+def execute_tool(name: str, params: dict, working_dir: str = None) -> str:
+    """执行指定工具，所有相对路径基于 working_dir 解析"""
     if name == "read_file":
-        return read_file(params["path"], params.get("encoding", "auto"))
+        path = _resolve_path(params["path"], working_dir)
+        return read_file(path, params.get("encoding", "auto"))
     elif name == "write_file":
-        return write_file(params["path"], params["content"])
+        path = _resolve_path(params["path"], working_dir)
+        return write_file(path, params["content"])
     elif name == "edit_file":
-        return edit_file(params["path"], params["old_text"], params["new_text"])
+        path = _resolve_path(params["path"], working_dir)
+        return edit_file(path, params["old_text"], params["new_text"])
     elif name == "list_directory":
-        return list_directory(params["path"], params.get("recursive", False))
+        path = _resolve_path(params["path"], working_dir)
+        return list_directory(path, params.get("recursive", False))
     elif name == "run_command":
-        return run_command(params["command"], params.get("working_dir"))
+        cmd_wd = params.get("working_dir")
+        if cmd_wd and not os.path.isabs(cmd_wd) and working_dir:
+            cmd_wd = os.path.join(working_dir, cmd_wd)
+        elif not cmd_wd:
+            cmd_wd = working_dir
+        return run_command(params["command"], cmd_wd)
     elif name == "search_files":
-        return search_files(params["query"], params["path"], params.get("file_pattern"))
+        path = _resolve_path(params["path"], working_dir)
+        return search_files(params["query"], path, params.get("file_pattern"))
     else:
         return f"未知工具: {name}"

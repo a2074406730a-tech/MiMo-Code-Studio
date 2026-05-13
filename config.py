@@ -8,8 +8,8 @@ SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 CONVERSATIONS_FILE = os.path.join(DATA_DIR, "conversations.json")
 
 DEFAULT_SETTINGS = {
-    "api_url": "https://token-plan-cn.xiaomimimo.com/anthropic/v1/messages",
-    "api_key": "tp-cafinrkdiydy2te5asqnyjmtkxsmf906fmku6ic4bodz7h5b",
+    "api_url": "https://your-api-endpoint/v1/messages",
+    "api_key": "",
     "model": "mimo-v2.5-pro",
     "max_tokens": 4096,
     "system_prompt": "你是 MiMo，一个友好的AI助手。你可以进行日常闲聊，也可以帮助用户编写和调试代码。\n\n规则：\n1. 用户只是在聊天、打招呼、问简单问题时，直接用自然语言回答，不要调用任何工具\n2. 只有当用户明确要求读写文件、执行命令、搜索代码等操作时，才使用工具\n3. 不确定是否需要用工具时，优先不用工具，直接回答\n4. 用中文回答",

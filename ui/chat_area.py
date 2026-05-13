@@ -1,6 +1,7 @@
 """对话区域组件"""
 
 import re
+import tkinter as tk
 import customtkinter as ctk
 from ui.i18n import T
 from ui.widgets import ToolCallCard
@@ -109,6 +110,9 @@ class MessageBubble(ctk.CTkFrame):
             fg_color="transparent",
         )
         self.text_box.pack(padx=14, pady=(10, 6), fill="both", expand=True)
+        # 强制文字左对齐
+        self.text_box._textbox.tag_configure("justify_left", justify="left")
+        self.text_box._textbox.tag_add("justify_left", "1.0", "end")
 
         # 底部工具栏
         if not is_user:
@@ -188,7 +192,7 @@ class MessageBubble(ctk.CTkFrame):
             self.text_box.update_idletasks()
             last_line = self.text_box.index("end-1c")
             lines = int(last_line.split(".")[0])
-            h = max(30, min(lines * 22 + 10, 6000))
+            h = max(56, min(lines * 22 + 10, 6000))
             self.text_box.configure(height=h)
         except Exception:
             pass
@@ -201,14 +205,16 @@ class MessageBubble(ctk.CTkFrame):
         self._theme = theme
         bubble_color = theme["user_bubble"] if self.is_user else theme["ai_bubble"]
         self.configure(fg_color=bubble_color)
-        self.text_box.configure(text_color=theme["text"])
+        self.text_box.configure(fg_color=bubble_color, text_color=theme["text"])
         if self.speaker_btn:
             self.speaker_btn.configure(
+                text=T("speak"),
                 hover_color=theme["border"],
                 text_color=theme["text_secondary"],
             )
         if self.copy_btn:
             self.copy_btn.configure(
+                text=T("copy"),
                 hover_color=theme["border"],
                 text_color=theme["text_secondary"],
             )
@@ -243,6 +249,193 @@ class ThinkingBubble(ctk.CTkFrame):
         self.label.configure(text_color=theme["text_secondary"])
 
 
+class GlowLogo(ctk.CTkFrame):
+    """高级发光 Logo — 呼吸灯 + 浮动粒子 + 流光扫过"""
+
+    def __init__(self, master, theme: dict, **kwargs):
+        super().__init__(master, fg_color="transparent", **kwargs)
+        self.theme = theme
+        self._running = True
+        self._phase = 0.0
+        self.W, self.H = 1040, 280
+
+        # 粒子系统
+        import random
+        self._particles = []
+        for _ in range(44):
+            self._particles.append({
+                "x": random.uniform(0, self.W),
+                "y": random.uniform(0, self.H),
+                "vx": random.uniform(-0.8, 0.8),
+                "vy": random.uniform(-1.2, -0.2),
+                "r": random.uniform(3.6, 8.0),
+                "phase": random.uniform(0, 6.28),
+            })
+
+        self.canvas = tk.Canvas(
+            self, width=self.W, height=self.H,
+            highlightthickness=0,
+            bg=theme.get("bg", "#0a0a0a"),
+        )
+        self.canvas.pack(expand=True)
+        self._tick()
+
+    # ── 颜色工具 ──────────────────────────────────────
+    def _mix(self, c1, c2, t):
+        """两色线性插值，t∈[0,1]"""
+        r1, g1, b1 = int(c1[1:3], 16), int(c1[3:5], 16), int(c1[5:7], 16)
+        r2, g2, b2 = int(c2[1:3], 16), int(c2[3:5], 16), int(c2[5:7], 16)
+        r = int(r1 + (r2 - r1) * t)
+        g = int(g1 + (g2 - g1) * t)
+        b = int(b1 + (b2 - b1) * t)
+        return f"#{min(255,max(0,r)):02x}{min(255,max(0,g)):02x}{min(255,max(0,b)):02x}"
+
+    def _accent(self, brightness=1.0):
+        a = self.theme.get("accent", "#d4a843")
+        return self._mix(self.theme.get("bg", "#0a0a0a"), a, brightness)
+
+    # ── 绘制 ──────────────────────────────────────────
+    def _render(self):
+        self.canvas.delete("all")
+        cx, cy = self.W // 2, self.H // 2
+        p = self._phase
+
+        import math
+        breathe = 0.55 + 0.45 * math.sin(p)
+        shimmer_pos = (math.sin(p * 0.7) + 1) / 2
+
+        # ── 1. 背景径向辉光（多层，从外到内）──
+        for i in range(8):
+            ratio = 0.04 + 0.06 * i
+            rx = 480 - i * 36
+            ry = 110 - i * 10
+            if rx < 40 or ry < 10:
+                continue
+            self.canvas.create_oval(
+                cx - rx, cy - ry, cx + rx, cy + ry,
+                fill="", outline=self._accent(ratio * breathe), width=1,
+            )
+
+        # ── 2. 左右装饰细线 + 端点菱形 ──
+        line_half = int(380 * breathe)
+        line_color = self._accent(0.35 * breathe)
+        for sx in [-1, 1]:
+            x0 = cx + sx * 100
+            x1 = cx + sx * line_half
+            self.canvas.create_line(x0, cy, x1, cy,
+                                    fill=line_color, width=1)
+            # 端点菱形
+            d = 6
+            lx = x1
+            self.canvas.create_polygon(
+                lx, cy - d, lx + d, cy, lx, cy + d, lx - d, cy,
+                fill=self._accent(0.3 * breathe), outline="",
+            )
+
+        # ── 3. 精致角标 ──
+        bracket_color = self._accent(0.4 * breathe)
+        dot_color = self._accent(0.55 * breathe)
+        for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+            bx = cx + dx * 420
+            by = cy + dy * 84
+            arm = 20
+            self.canvas.create_line(bx, by, bx + dx * arm, by,
+                                    fill=bracket_color, width=1)
+            self.canvas.create_line(bx, by, bx, by + dy * arm,
+                                    fill=bracket_color, width=1)
+            self.canvas.create_oval(
+                bx - 3, by - 3, bx + 3, by + 3,
+                fill=dot_color, outline="",
+            )
+
+        # ── 4. 主文字 — 5层发光 ──
+        font_spec = ("Segoe UI", 56, "bold")
+        # 第1层：最外层大范围柔光
+        self.canvas.create_text(
+            cx, cy, text="MiMo Code Studio",
+            font=font_spec,
+            fill=self._accent(0.08 * breathe), anchor="center",
+        )
+        # 第2层：外层光晕
+        self.canvas.create_text(
+            cx, cy, text="MiMo Code Studio",
+            font=font_spec,
+            fill=self._accent(0.2 * breathe), anchor="center",
+        )
+        # 第3层：中层光晕
+        self.canvas.create_text(
+            cx, cy, text="MiMo Code Studio",
+            font=font_spec,
+            fill=self._accent(0.45 * breathe), anchor="center",
+        )
+        # 第4层：内层明亮
+        self.canvas.create_text(
+            cx, cy, text="MiMo Code Studio",
+            font=font_spec,
+            fill=self._accent(0.7 + 0.2 * breathe), anchor="center",
+        )
+        # 第5层：流光高亮主文字
+        shimmer_boost = max(0, 0.4 * (1 - abs(shimmer_pos - 0.5) * 3))
+        final_b = min(1.0, 0.8 + 0.2 * breathe + shimmer_boost)
+        white_t = shimmer_boost * 0.6
+        text_color = self._mix(self._accent(final_b), "#ffffff", white_t)
+        self.canvas.create_text(
+            cx, cy, text="MiMo Code Studio",
+            font=font_spec,
+            fill=text_color, anchor="center",
+        )
+
+        # ── 5. 下方细线 ──
+        rule_half = int(200 * breathe)
+        self.canvas.create_line(cx - rule_half, cy + 44, cx + rule_half, cy + 44,
+                                fill=self._accent(0.18 * breathe), width=1)
+
+        # ── 6. 浮动粒子（更大更亮）──
+        for pt in self._particles:
+            flicker = (math.sin(pt["phase"] + p * 3) + 1) / 2
+            alpha = 0.25 + 0.45 * flicker
+            pr = pt["r"] * (0.7 + 0.3 * breathe)
+            if pr < 1.6:
+                continue
+            color = self._accent(alpha * breathe)
+            self.canvas.create_oval(
+                pt["x"] - pr, pt["y"] - pr,
+                pt["x"] + pr, pt["y"] + pr,
+                fill=color, outline="",
+            )
+
+    # ── 动画循环 ─────────────────────────────────────
+    def _tick(self):
+        if not self._running:
+            return
+        try:
+            if not self.winfo_exists():
+                return
+            self._phase += 0.035
+            # 更新粒子位置
+            for pt in self._particles:
+                pt["x"] += pt["vx"]
+                pt["y"] += pt["vy"]
+                if pt["y"] < -5:
+                    pt["y"] = self.H + 5
+                    pt["x"] = __import__("random").uniform(0, self.W)
+                if pt["x"] < -5:
+                    pt["x"] = self.W + 5
+                elif pt["x"] > self.W + 5:
+                    pt["x"] = -5
+            self._render()
+            self.after(40, self._tick)
+        except Exception:
+            pass
+
+    def apply_theme(self, theme: dict):
+        self.theme = theme
+        self.canvas.configure(bg=theme.get("bg", "#0a0a0a"))
+
+    def stop(self):
+        self._running = False
+
+
 class ChatArea(ctk.CTkScrollableFrame):
     """对话区域"""
 
@@ -253,49 +446,134 @@ class ChatArea(ctk.CTkScrollableFrame):
         self._bubbles = []
 
         self.configure(fg_color=theme["bg"])
+        self._scrollbar_visible = True
+        self._scrollbar.pack_forget()
+        self._scrollbar_visible = False
+
+        # 强制 content frame 跟随 canvas 宽度（CTkScrollableFrame 的关键修复）
+        self._parent_canvas.bind("<Configure>", self._on_canvas_resize)
+
+        # 品牌水印（GlowLogo 发光动画）
+        self._logo = None
+        self._create_watermark()
+
+    def _on_canvas_resize(self, event=None):
+        try:
+            cw = self._parent_canvas.winfo_width()
+            if cw > 1:
+                self._parent_canvas.itemconfigure(
+                    self._create_window_id, width=cw
+                )
+            self._center_watermark()
+        except Exception:
+            pass
+
+    def _create_watermark(self):
+        if self._logo:
+            return
+        # 清理残留canvas项
+        try:
+            self._parent_canvas.delete("watermark")
+        except Exception:
+            pass
+        self._logo = GlowLogo(self._parent_canvas, theme=self.theme)
+        self._parent_canvas.create_window(
+            0, 0, window=self._logo, anchor="center",
+            tags="watermark",
+        )
+        self.after(100, self._center_watermark)
+
+    def _center_watermark(self):
+        try:
+            cw = self._parent_canvas.winfo_width()
+            ch = self._parent_canvas.winfo_height()
+            self._parent_canvas.coords("watermark", cw // 2, ch // 2)
+        except Exception:
+            pass
+
+    def _hide_watermark(self):
+        if self._logo:
+            try:
+                self._logo.stop()
+            except Exception:
+                pass
+            try:
+                self._parent_canvas.delete("watermark")
+            except Exception:
+                pass
+            try:
+                if self._logo.winfo_exists():
+                    self._logo.destroy()
+            except Exception:
+                pass
+            self._logo = None
+
+    def _check_scrollbar(self):
+        try:
+            self.update_idletasks()
+            bbox = self._parent_canvas.bbox("all")
+            if bbox:
+                content_h = bbox[3] - bbox[1]
+                view_h = self._parent_canvas.winfo_height()
+                need_scroll = content_h > view_h + 10
+            else:
+                need_scroll = False
+
+            if need_scroll != self._scrollbar_visible:
+                self._scrollbar_visible = need_scroll
+                if need_scroll:
+                    self._scrollbar.pack(side="right", fill="y")
+                else:
+                    self._scrollbar.pack_forget()
+        except Exception:
+            pass
 
     def add_user_message(self, text: str) -> MessageBubble:
+        self._hide_watermark()
+
         wrapper = ctk.CTkFrame(self, fg_color="transparent")
-        wrapper.pack(fill="x", padx=10, pady=6, anchor="e")
+        wrapper.pack(fill="x", padx=10, pady=(8, 4))
 
         bubble = MessageBubble(wrapper, is_user=True, theme=self.theme)
-        bubble.pack(anchor="e", padx=(80, 0))
+        bubble.pack(anchor="e", padx=(80, 10))
         bubble.set_text(text)
         self._bubbles.append(bubble)
         self._do_scroll()
         return bubble
 
     def add_ai_message(self) -> MessageBubble:
+        self._hide_watermark()
+
         wrapper = ctk.CTkFrame(self, fg_color="transparent")
-        wrapper.pack(fill="x", padx=10, pady=6, anchor="w")
+        wrapper.pack(fill="x", padx=10, pady=(8, 4))
 
         bubble = MessageBubble(
             wrapper, is_user=False, theme=self.theme,
             on_speak=self.on_speak,
         )
-        bubble.pack(anchor="w", padx=(0, 80))
+        bubble.pack(anchor="w", padx=(10, 60))
         self._bubbles.append(bubble)
         self._do_scroll()
         return bubble
 
     def add_thinking(self) -> ThinkingBubble:
         wrapper = ctk.CTkFrame(self, fg_color="transparent")
-        wrapper.pack(fill="x", padx=10, pady=6, anchor="w")
+        wrapper.pack(fill="x", padx=10, pady=(8, 4))
 
         thinking = ThinkingBubble(wrapper, theme=self.theme)
-        thinking.pack(anchor="w", padx=(0, 80))
+        thinking.pack(anchor="w", padx=(10, 60))
         self._do_scroll()
         return thinking
 
     def add_tool_card(self, tool_name: str, params: str) -> ToolCallCard:
         wrapper = ctk.CTkFrame(self, fg_color="transparent")
-        wrapper.pack(fill="x", padx=10, pady=4, anchor="w")
+        wrapper.pack(fill="x", padx=10, pady=4)
 
         card = ToolCallCard(
             wrapper, theme=self.theme,
             tool_name=tool_name, params=params,
         )
-        card.pack(anchor="w", padx=(0, 80), fill="x")
+        card.pack(anchor="w", padx=(10, 60), fill="x")
         self._do_scroll()
         return card
 
@@ -309,11 +587,24 @@ class ChatArea(ctk.CTkScrollableFrame):
             text_color=self.theme["error"],
             wraplength=500,
         )
-        label.pack(padx=20)
+        label.pack(anchor="w", padx=20)
+        self._do_scroll()
+
+    def add_paused(self):
+        wrapper = ctk.CTkFrame(self, fg_color="transparent")
+        wrapper.pack(fill="x", padx=10, pady=6)
+
+        label = ctk.CTkLabel(
+            wrapper, text=f"⏸  {T('paused_status')}",
+            font=ctk.CTkFont(size=12),
+            text_color=self.theme["text_secondary"],
+        )
+        label.pack(anchor="w", padx=20)
         self._do_scroll()
 
     def _do_scroll(self):
         self.after(50, self._scroll_to_bottom)
+        self.after(100, self._check_scrollbar)
 
     def _scroll_to_bottom(self):
         self._parent_canvas.yview_moveto(1.0)
@@ -321,14 +612,31 @@ class ChatArea(ctk.CTkScrollableFrame):
     def apply_theme(self, theme: dict):
         self.theme = theme
         self.configure(fg_color=theme["bg"])
+        # 更新logo背景色和主题色
+        if self._logo:
+            self._logo.apply_theme(theme)
         for bubble in self._bubbles:
             bubble.apply_theme(theme)
+        # 更新所有wrapper frame的背景色
+        for wrapper in self.winfo_children():
+            if isinstance(wrapper, ctk.CTkFrame):
+                wrapper.configure(fg_color="transparent")
         # 强制刷新
         self.update_idletasks()
 
     def clear_all(self):
+        # 先清理logo（在canvas上，不在winfo_children里）
+        self._hide_watermark()
         for widget in self.winfo_children():
             widget.destroy()
         self._bubbles.clear()
         # 重置滚动位置到顶部
         self.after(50, lambda: self._parent_canvas.yview_moveto(0))
+        # 重新显示水印
+        self._create_watermark()
+        # 隐藏滚动条
+        self._scrollbar_visible = False
+        try:
+            self._scrollbar.pack_forget()
+        except Exception:
+            pass

@@ -7,12 +7,28 @@ import uuid
 import edge_tts
 
 VOICE_LIST = [
-    ("zh-CN-XiaoxiaoNeural", "晓晓（女声，温柔）"),
-    ("zh-CN-XiaoxiaoMultilingualNeural", "晓晓多语言（女声）"),
-    ("zh-CN-YunxiNeural", "云希（男声，阳光）"),
-    ("zh-CN-YunjianNeural", "云健（男声，沉稳）"),
-    ("zh-CN-XiaoyiNeural", "晓艺（女声，活泼）"),
+    # 中文音色
+    ("zh-CN-XiaoxiaoNeural", "voice_xiaoxiao"),
+    ("zh-CN-XiaoxiaoMultilingualNeural", "voice_xiaoxiao_multi"),
+    ("zh-CN-YunxiNeural", "voice_yunxi"),
+    ("zh-CN-YunjianNeural", "voice_yunjian"),
+    ("zh-CN-XiaoyiNeural", "voice_xiaoyi"),
+    ("zh-CN-YunyangNeural", "voice_yunyang"),
+    ("zh-CN-XiaochenNeural", "voice_xiaochen"),
+    ("zh-CN-XiaohanNeural", "voice_xiaohan"),
+    # 英文音色
+    ("en-US-JennyNeural", "voice_jenny"),
+    ("en-US-AriaNeural", "voice_aria"),
+    ("en-US-GuyNeural", "voice_guy"),
+    ("en-US-SaraNeural", "voice_sara"),
+    ("en-US-DavisNeural", "voice_davis"),
 ]
+
+
+def get_voice_display(voice_key: str) -> str:
+    """获取语音的本地化显示名称"""
+    from ui.i18n import T
+    return T(voice_key)
 
 
 async def _generate_audio(text: str, voice: str, rate: int, volume: int) -> str:
